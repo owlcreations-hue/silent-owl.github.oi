@@ -1,0 +1,740 @@
+<!--
+  One-Page Literary Blog (index.html)
+  -----------------------------------
+  Author: generated for you (sudu)
+  Purpose: Single-page static blog with separate post files, popup reader,
+           mailto-based comments, tag filtering, shareable links, and
+           click-sparkle effects.
+
+  IMPORTANT NOTES (read first):
+  - This file is the site's main entry point. It expects a folder named
+    "posts" alongside it containing:
+      1) posts.json  (metadata list of posts)
+      2) each post as an individual HTML file (e.g. wall-post-01.html)
+  - For local testing you must run a local static server (e.g. VS Code Live Server
+    or `python -m http.server`) because `fetch()` will fail on file:// URIs.
+  - The comments use mailto: links (no backend). When a visitor submits
+    the comment form at the end of a post, their email client opens with:
+      Subject = post title
+      Body = name, country, email, comment, and the post link
+
+  Project structure (recommended):
+    /index.html           <-- this file
+    /favicon.png
+    /style/               <-- optional separate CSS files (this file inlines CSS)
+    /scripts/             <-- optional separate JS files (this file inlines JS)
+    /posts/
+      posts.json          <-- JSON array with metadata for posts (see example below)
+      wall-post-01.html   <-- full HTML of each post
+      pawaura-post-01.html
+    /images/
+      ... image files referenced by posts or the site
+
+  How to add a new post (brief):
+  1) Create a new HTML file in /posts/ (copy the sample post at the bottom of this file)
+  2) Add an entry to posts.json with its metadata (title, slug, language, tags, date, excerpt, path)
+  3) The site will show the card automatically (after host reload)
+
+  When ready to host: GitHub Pages or Netlify are recommended.
+
+  Below: the full single-file site (HTML + CSS + JS). All important sections
+  have long comments explaining how to update them.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Gateway — One-Page Literary Blog</title>
+  <meta name="description" content="A modern one-page blog (Gateway / Person / Wall / පවුර / Frame / Wire / Rack)." />
+  <link rel="icon" href="favicon.png" />
+
+  <!-- =====================
+       STYLES (change colors in :root)
+       ===================== -->
+  <style>
+    /*
+      Color variables — update here to change the site's palette.
+      Palette: black, purple, ocean blue, sky blue, light blue.
+    */
+    :root{
+      --bg: #0b0b0d;               /* near black */
+      --text: #e8eef8;             /* soft light text */
+      --muted: #b6c7dd;            /* muted text */
+      --purple: #8747ff;           /* identity purple */
+      --ocean: #1e90ff;            /* ocean blue */
+      --sky: #63b3ff;              /* sky blue */
+      --light: #cfe9ff;            /* light blue */
+      --accent-contrast: #ffffff;  /* used for small accents */
+      --card: #0f1220;             /* card background */
+      --glass: rgba(255,255,255,0.03);
+      --radius: 12px;
+      --maxwidth: 980px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, 'Roboto Mono', monospace;
+      --sans: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+
+    /* Basic reset */
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:var(--sans);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      line-height:1.6;
+      padding-bottom:80px; /* space for mobile nav */
+    }
+
+    /* Layout container */
+    .wrap{max-width:var(--maxwidth);margin:36px auto;padding:20px}
+
+    /* Header / Navigation */
+    header.site-header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .brand{display:flex;align-items:center;gap:12px}
+    .brand .logo{width:48px;height:48px;background:linear-gradient(135deg,var(--purple),var(--ocean));border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent-contrast)}
+    .brand h1{font-size:18px;margin:0}
+
+    /* Desktop nav */
+    nav.mainnav{display:flex;gap:10px}
+    nav.mainnav a{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:8px}
+    nav.mainnav a.active{background:linear-gradient(90deg,rgba(135,71,255,0.12),rgba(30,144,255,0.08));color:var(--accent-contrast)}
+    nav.mainnav a:hover{color:var(--light)}
+
+    /* Mobile nav (simple bottom sticky) */
+    .mobile-nav{display:none}
+
+    /* Sections (only one shown at a time) */
+    section.screen{display:none;opacity:0;transform:translateY(8px);transition:opacity .35s ease,transform .35s ease}
+    section.screen.active{display:block;opacity:1;transform:none}
+
+    /* Gateway styles */
+    .gateway{display:flex;flex-direction:column;gap:18px;align-items:flex-start}
+    .tagline{font-size:20px;color:var(--muted)}
+    .featured{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:16px;border-radius:12px}
+
+    /* Person (about) */
+    .person-card{background:var(--card);padding:18px;border-radius:12px}
+    .person-socials{display:flex;gap:10px;margin-top:12px}
+    .social-btn{display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:8px;background:var(--glass);text-decoration:none;color:var(--text)}
+
+    /* Post listing */
+    .post-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+    .card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:12px;border-radius:12px;cursor:pointer}
+    .card h3{margin:0 0 8px 0;font-size:16px}
+    .card p.excerpt{margin:0;font-size:13px;color:var(--muted)}
+    .meta{font-size:12px;color:var(--muted);margin-top:8px}
+
+    /* Modal / reader */
+    .modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:9999}
+    .modal.show{display:flex}
+    .modal-backdrop{position:absolute;inset:0;background:rgba(3,6,10,0.7);backdrop-filter:blur(4px)}
+    .reader{position:relative;max-width:820px;width:100%;max-height:90vh;overflow:auto;background:linear-gradient(180deg,#071018aa,#081122);border-radius:12px;padding:28px;border:1px solid rgba(255,255,255,0.03)}
+    .reader h2{margin-top:0}
+    .reader .content{color:var(--text)}
+
+    /* Comment area (Say It / Text Us) */
+    .sayit{margin-top:28px;padding:12px;border-radius:8px;background:rgba(255,255,255,0.02)}
+    .sayit label{display:block;font-size:13px;color:var(--muted);margin-bottom:6px}
+    .sayit input,.sayit textarea{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--text);resize:vertical}
+    .sayit .row{display:flex;gap:10px}
+    .sayit .row>div{flex:1}
+    .sayit button{margin-top:10px;padding:10px 14px;border-radius:8px;background:linear-gradient(90deg,var(--purple),var(--ocean));border:none;color:white;cursor:pointer}
+
+    /* Frame (image grid) */
+    .image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+    .image-grid img{width:100%;height:150px;object-fit:cover;border-radius:8px}
+
+    /* Wire (contact) */
+    .contact-card{background:var(--card);padding:14px;border-radius:12px}
+
+    /* Rack (books) */
+    .rack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+    .book{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:10px;border-radius:8px}
+
+    /* small helpers */
+    .muted{color:var(--muted)}
+    .center{text-align:center}
+
+    /* Responsive adjustments */
+    @media (max-width:720px){
+      .wrap{margin:14px;padding:12px}
+      header.site-header{flex-direction:row;align-items:center}
+      nav.mainnav{display:none}
+      .mobile-nav{display:flex;position:fixed;left:0;right:0;bottom:0;gap:6px;background:linear-gradient(180deg,rgba(0,0,0,0.6),rgba(0,0,0,0.8));padding:8px 12px;border-top:1px solid rgba(255,255,255,0.03);justify-content:space-around}
+      .mobile-nav a{color:var(--muted);font-size:12px}
+      .reader{padding:20px}
+      .image-grid img{height:120px}
+    }
+
+    /* Tiny utility for sparkle layer */
+    #sparkle-layer{position:fixed;inset:0;pointer-events:none;z-index:99999}
+
+  </style>
+</head>
+<body>
+  <div id="sparkle-layer" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <header class="site-header">
+      <div class="brand">
+        <div class="logo">S</div>
+        <div>
+          <h1>Gateway — One-Page Blog</h1>
+          <div class="muted">Quiet writing · Wall (EN) · පවුර (SI)</div>
+        </div>
+      </div>
+
+      <nav class="mainnav" aria-label="Main navigation">
+        <a href="#" data-screen="gateway" class="navlink active">Gateway</a>
+        <a href="#" data-screen="person" class="navlink">Person</a>
+        <a href="#" data-screen="wall" class="navlink">Wall</a>
+        <a href="#" data-screen="pawaura" class="navlink">පවුර</a>
+        <a href="#" data-screen="frame" class="navlink">Frame</a>
+        <a href="#" data-screen="wire" class="navlink">Wire</a>
+        <a href="#" data-screen="rack" class="navlink">Rack</a>
+      </nav>
+    </header>
+
+    <!-- SCREEN: GATEWAY -->
+    <section id="gateway" class="screen active">
+      <div class="gateway">
+        <div class="tagline">Welcome — a space for longer thoughts and slow reading.</div>
+        <div class="featured">
+          <strong>Featured:</strong> <span id="featured-title">Loading...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN: PERSON -->
+    <section id="person" class="screen">
+      <div class="person-card">
+        <h2>Person</h2>
+        <p>I write quietly, slowly, and with care. This space holds English (Wall) and Sinhala (පවුර) essays, memories, and experiments with form.</p>
+
+        <div class="person-socials" aria-label="Social links">
+          <!-- Social buttons: update link hrefs to your profiles -->
+          <a class="social-btn" href="#" target="_blank" rel="noopener noreferrer">Facebook</a>
+          <a class="social-btn" href="#" target="_blank" rel="noopener noreferrer">WhatsApp</a>
+          <a class="social-btn" href="#" target="_blank" rel="noopener noreferrer">Telegram</a>
+          <a class="social-btn" href="#" target="_blank" rel="noopener noreferrer">X</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN: WALL (English posts list) -->
+    <section id="wall" class="screen">
+      <h2>Wall</h2>
+      <div class="muted">English posts</div>
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label class="muted">Filter by tag:</label>
+        </div>
+        <div id="tag-filter" style="display:flex;gap:8px"></div>
+      </div>
+
+      <div style="margin-top:12px" id="wall-list" class="post-grid" aria-live="polite"></div>
+    </section>
+
+    <!-- SCREEN: පවුර (Sinhala posts list) -->
+    <section id="pawaura" class="screen">
+      <h2>පවුර</h2>
+      <div class="muted">Sinhala posts</div>
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div>
+          <label class="muted">Filter by tag:</label>
+        </div>
+        <div id="tag-filter-si" style="display:flex;gap:8px"></div>
+      </div>
+
+      <div style="margin-top:12px" id="pawaura-list" class="post-grid" aria-live="polite"></div>
+    </section>
+
+    <!-- SCREEN: FRAME (images) -->
+    <section id="frame" class="screen">
+      <h2>Frame</h2>
+      <div class="image-grid" id="image-grid">
+        <!-- Put your images in /images/ and add <img> entries here or update this area -->
+        <img src="images/sample-1.jpg" alt="Sample image 1" onerror="this.style.display='none'"/>
+        <img src="images/sample-2.jpg" alt="Sample image 2" onerror="this.style.display='none'"/>
+      </div>
+    </section>
+
+    <!-- SCREEN: WIRE (contact) -->
+    <section id="wire" class="screen">
+      <h2>Wire</h2>
+      <div class="contact-card">
+        <p>If you want to reach out, use this short note — it opens your email client.</p>
+
+        <div style="max-width:560px">
+          <label class="muted">Your email</label>
+          <input id="contact-email" placeholder="name@example.com" />
+          <label class="muted" style="margin-top:8px">Message</label>
+          <textarea id="contact-message" rows="4" placeholder="Short note"></textarea>
+          <div style="margin-top:8px">
+            <button id="contact-submit">Send (open email)</button>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- SCREEN: RACK (books) -->
+    <section id="rack" class="screen">
+      <h2>Rack</h2>
+      <div class="muted">Books & links</div>
+      <div style="margin-top:12px" class="rack-grid" id="rack-grid">
+        <!-- Add book entries here later -->
+      </div>
+    </section>
+
+  </div> <!-- /wrap -->
+
+  <!-- MOBILE NAV -->
+  <nav class="mobile-nav" aria-hidden="false">
+    <a href="#" data-screen="gateway">Gateway</a>
+    <a href="#" data-screen="wall">Wall</a>
+    <a href="#" data-screen="pawaura">පවුර</a>
+    <a href="#" data-screen="person">Person</a>
+    <a href="#" data-screen="wire">Wire</a>
+  </nav>
+
+  <!-- MODAL / READER -->
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <article class="reader" role="dialog" aria-modal="true" aria-labelledby="reader-title">
+      <button id="reader-close" aria-label="Close">Close</button>
+      <h2 id="reader-title">Article title</h2>
+      <div class="meta muted" id="reader-meta">&nbsp;</div>
+      <div class="content" id="reader-content">Loading...</div>
+
+      <!-- Say It / Text Us section -->
+      <div class="sayit" id="sayit-area">
+        <h3>Say It</h3>
+        <div class="row">
+          <div>
+            <label>Name</label>
+            <input id="sayit-name" placeholder="Your name" />
+          </div>
+          <div>
+            <label>Country</label>
+            <input id="sayit-country" placeholder="Country" />
+          </div>
+        </div>
+        <label>Your email (for follow-up if needed)</label>
+        <input id="sayit-email" placeholder="name@example.com" />
+        <label>Your note</label>
+        <textarea id="sayit-comment" rows="4" placeholder="Write your message here"></textarea>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button id="sayit-submit">Send (open email)</button>
+          <button id="sayit-copy">Copy text</button>
+        </div>
+      </div>
+
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:center;justify-content:space-between">
+        <div class="muted">Reading tools: <small id="reading-mode-status">Normal</small></div>
+        <div style="display:flex;gap:8px">
+          <button id="toggle-reading">Toggle reading mode</button>
+          <button id="share-post">Share</button>
+        </div>
+      </div>
+
+    </article>
+  </div>
+
+  <!-- =====================
+       SCRIPTS
+       ===================== -->
+  <script>
+    /*
+      Main JavaScript
+      - Navigation between screens
+      - Loading posts index (posts.json)
+      - Rendering cards for Wall and පවුර
+      - Loading post HTML via fetch into modal reader
+      - Share link, URL hash handling
+      - Say It mailto composition
+      - Sparkle click effect
+
+      IMPORTANT: If you put this file inside a subfolder change the paths to /posts/posts.json
+    */
+
+    // ------------------ Helper utilities ------------------
+    function qs(sel, root=document){return root.querySelector(sel)}
+    function qsa(sel, root=document){return Array.from(root.querySelectorAll(sel))}
+    function el(tag, props={}, children=[]){const d=document.createElement(tag);for(const k in props) if(k==='cls') d.className=props[k]; else d.setAttribute(k,props[k]); children.forEach(c=>d.appendChild(typeof c==='string'?document.createTextNode(c):c)); return d}
+
+    // ------------------ Navigation ------------------
+    const navLinks = qsa('.navlink')
+    const screens = qsa('.screen')
+    function showScreen(id){
+      screens.forEach(s=>s.classList.toggle('active', s.id===id))
+      navLinks.forEach(a=>a.classList.toggle('active', a.dataset.screen===id))
+      // update URL without reloading
+      history.replaceState(null,'', '#screen='+id)
+    }
+
+    navLinks.forEach(a=>a.addEventListener('click', e=>{e.preventDefault(); const s=a.dataset.screen; showScreen(s)}))
+
+    // show initial screen from hash if exists
+    (function(){
+      const hash = location.hash.replace(/^#/, '')
+      if(hash.startsWith('screen=')){ const s = hash.split('=')[1]; if(s) showScreen(s) }
+    })()
+
+    // ------------------ Posts index & loading ------------------
+    // Expected file: /posts/posts.json
+    // Format: [{"title":"...","slug":"wall-01","lang":"en","tags":["tag1"],"date":"2025-12-29","excerpt":"...","path":"posts/wall-01.html"}, ...]
+
+    const POSTS_JSON = 'posts/posts.json' // change if you store elsewhere
+
+    let POSTS = []
+
+    async function loadPosts(){
+      try{
+        const r = await fetch(POSTS_JSON)
+        if(!r.ok) throw new Error('posts.json not found')
+        POSTS = await r.json()
+        renderPostLists()
+        setFeatured()
+        handleHashPostOpen()
+      }catch(err){
+        console.warn('Could not load posts.json. For local testing use a static server.', err)
+        // Keep empty state messages
+        qs('#wall-list').innerHTML = '<div class="muted">No posts found. Add posts.json and post files in /posts/</div>'
+        qs('#pawaura-list').innerHTML = '<div class="muted">No posts found. Add posts.json and post files in /posts/</div>'
+      }
+    }
+
+    function renderPostLists(){
+      const wall = qs('#wall-list'); const pawa = qs('#pawaura-list');
+      wall.innerHTML=''; pawa.innerHTML='';
+
+      // gather tags
+      const tagsEN = new Set(); const tagsSI = new Set();
+
+      POSTS.forEach(p=>{
+        const card = el('div',{cls:'card','data-slug':p.slug});
+        card.addEventListener('click', ()=> openPost(p))
+        const h = el('h3',{},[p.title]);
+        const ex = el('p',{cls:'excerpt'},[p.excerpt || ''])
+        const meta = el('div',{cls:'meta'},[p.date || ''])
+        card.appendChild(h); card.appendChild(ex); card.appendChild(meta);
+
+        if(p.lang==='en'){
+          wall.appendChild(card);
+          (p.tags||[]).forEach(t=>tagsEN.add(t))
+        } else {
+          pawa.appendChild(card);
+          (p.tags||[]).forEach(t=>tagsSI.add(t))
+        }
+      })
+
+      renderFilterButtons(Array.from(tagsEN), qs('#tag-filter'), 'en')
+      renderFilterButtons(Array.from(tagsSI), qs('#tag-filter-si'), 'si')
+    }
+
+    function renderFilterButtons(tags, container, lang){
+      container.innerHTML = '';
+      const all = el('button',{},['All']); all.addEventListener('click', ()=> filterByTag(null, lang)); container.appendChild(all)
+      tags.forEach(t=>{const b = el('button',{},[t]); b.addEventListener('click', ()=> filterByTag(t, lang)); container.appendChild(b)})
+    }
+
+    function filterByTag(tag, lang){
+      const list = lang==='en' ? qs('#wall-list') : qs('#pawaura-list')
+      Array.from(list.children).forEach(c=>{
+        const slug = c.dataset.slug
+        const post = POSTS.find(p=>p.slug===slug)
+        if(!post) return
+        if(!tag) c.style.display = ''
+        else c.style.display = (post.tags||[]).includes(tag) ? '' : 'none'
+      })
+    }
+
+    function setFeatured(){
+      const first = POSTS.find(p=>p.lang==='en')
+      if(first) qs('#featured-title').textContent = first.title
+      else qs('#featured-title').textContent = 'No posts yet'
+    }
+
+    // ------------------ Modal / Reader ------------------
+    const modal = qs('#modal'); const readerContent = qs('#reader-content'); const readerTitle = qs('#reader-title'); const readerMeta = qs('#reader-meta');
+    function openPost(post){
+      // update URL for shareability
+      const postHash = '#post='+encodeURIComponent(post.slug)
+      history.replaceState(null,'', postHash)
+      showModal()
+      readerTitle.textContent = post.title
+      readerMeta.textContent = (post.date||'') + (post.tags?(' · '+post.tags.join(', ')):'')
+      readerContent.innerHTML = 'Loading article...'
+      // fetch post file
+      fetch(post.path).then(r=>{
+        if(!r.ok) throw new Error('Post not found')
+        return r.text()
+      }).then(html=>{
+        // We expect the post HTML to contain a <div id="post-body">...</div>
+        // If it is a full HTML page, we can try to extract the body content; otherwise just inject.
+        const extracted = extractPostBody(html)
+        readerContent.innerHTML = extracted
+        // scroll to top of content
+        modal.querySelector('.reader').scrollTop = 0
+      }).catch(err=>{
+        readerContent.innerHTML = '<div class="muted">Unable to load post. Check the path in posts.json.</div>'
+        console.error(err)
+      })
+    }
+
+    function extractPostBody(html){
+      // naive extraction: look for <div id="post-body"> ... </div>
+      const markerStart = '<div id="post-body"'
+      const idx = html.indexOf(markerStart)
+      if(idx!==-1){
+        // find the first closing > after markerStart
+        const startTagEnd = html.indexOf('>', idx)+1
+        const end = html.indexOf('</div>', startTagEnd)
+        if(end!==-1) return html.slice(startTagEnd, end)
+      }
+      // fallback: return the whole html (dangerous but better than nothing)
+      return html
+    }
+
+    function showModal(){ modal.classList.add('show'); modal.setAttribute('aria-hidden','false') }
+    function hideModal(){ modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); history.replaceState(null,'', '#') }
+
+    qs('#modal-backdrop').addEventListener('click', hideModal)
+    qs('#reader-close').addEventListener('click', hideModal)
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') hideModal() })
+
+    // Open post if hash on load
+    function handleHashPostOpen(){
+      const h = location.hash.replace(/^#/,'')
+      if(h.startsWith('post=')){
+        const slug = decodeURIComponent(h.split('=')[1])
+        const p = POSTS.find(x=>x.slug===slug)
+        if(p) openPost(p)
+      }
+    }
+
+    // ------------------ Say It (mailto composition) ------------------
+    function buildMailToLink(postTitle, postSlug, name, country, email, comment){
+      const subject = encodeURIComponent(postTitle)
+      const postLink = location.origin + location.pathname + '#post=' + encodeURIComponent(postSlug)
+      const bodyParts = []
+      bodyParts.push('Post: '+postTitle)
+      bodyParts.push('Link: '+postLink)
+      if(name) bodyParts.push('Name: '+name)
+      if(country) bodyParts.push('Country: '+country)
+      if(email) bodyParts.push('From Email: '+email)
+      if(comment) bodyParts.push('Message:\n'+comment)
+      const body = encodeURIComponent(bodyParts.join('\n\n'))
+      return 'mailto:?subject='+subject+'&body='+body
+    }
+
+    qs('#sayit-submit').addEventListener('click', ()=>{
+      // find current post slug from URL
+      const h = location.hash.replace(/^#/,'')
+      let slug = ''
+      if(h.startsWith('post=')) slug = decodeURIComponent(h.split('=')[1])
+      const post = POSTS.find(x=>x.slug===slug)
+      const postTitle = post? post.title : 'Unknown post'
+      const name = qs('#sayit-name').value.trim()
+      const country = qs('#sayit-country').value.trim()
+      const email = qs('#sayit-email').value.trim()
+      const comment = qs('#sayit-comment').value.trim()
+      const mailto = buildMailToLink(postTitle, slug, name, country, email, comment)
+      // open email client
+      window.location.href = mailto
+    })
+
+    qs('#sayit-copy').addEventListener('click', ()=>{
+      const name = qs('#sayit-name').value.trim()
+      const country = qs('#sayit-country').value.trim()
+      const email = qs('#sayit-email').value.trim()
+      const comment = qs('#sayit-comment').value.trim()
+      const parts = ['Name: '+name,'Country: '+country,'Email: '+email,'Message:\n'+comment].join('\n\n')
+      navigator.clipboard.writeText(parts).then(()=>alert('Copied to clipboard'))
+    })
+
+    // Contact form (Wire)
+    qs('#contact-submit').addEventListener('click', ()=>{
+      const email = qs('#contact-email').value.trim()
+      const msg = qs('#contact-message').value.trim()
+      const subject = encodeURIComponent('Site contact')
+      const body = encodeURIComponent('Message:\n\n'+msg+'\n\nFrom: '+email)
+      window.location.href = 'mailto:?subject='+subject+'&body='+body
+    })
+
+    // Share button
+    qs('#share-post').addEventListener('click', ()=>{
+      const h = location.hash.replace(/^#/,'')
+      if(h.startsWith('post=')){
+        const link = location.origin + location.pathname + '#'+h
+        if(navigator.share){
+          navigator.share({title:document.title,text:readerTitle.textContent,url:link}).catch(()=>copyToClipboard(link))
+        } else {
+          copyToClipboard(link)
+        }
+      } else {
+        alert('No post open to share')
+      }
+    })
+
+    function copyToClipboard(text){ navigator.clipboard.writeText(text).then(()=>alert('Link copied')) }
+
+    // Reading mode toggle
+    let readingMode = false
+    qs('#toggle-reading').addEventListener('click', ()=>{
+      readingMode = !readingMode
+      qs('#reading-mode-status').textContent = readingMode? 'Reading mode' : 'Normal'
+      qs('.reader').style.fontSize = readingMode ? '20px' : ''
+      qs('.reader').style.lineHeight = readingMode ? '1.9' : ''
+      qs('.reader').style.background = readingMode ? 'linear-gradient(180deg,#03121a,#041822)' : 'linear-gradient(180deg,#071018aa,#081122)'
+    })
+
+    // ------------------ Sparkle click effect ------------------
+    // Colors: red, orange, yellow, pink, white
+    const SPARK_COLORS = ['#ff5a5a','#ff9a3c','#ffd24d','#ff86c9','#ffffff']
+    const sparkleLayer = qs('#sparkle-layer')
+
+    function spawnSparkles(x,y){
+      for(let i=0;i<12;i++){
+        const s = document.createElement('div')
+        s.style.position='absolute'
+        s.style.left = x+'px'
+        s.style.top = y+'px'
+        const size = (Math.random()*6)+4
+        s.style.width = size+'px'
+        s.style.height = size+'px'
+        s.style.borderRadius='50%'
+        s.style.pointerEvents = 'none'
+        s.style.zIndex = 999999
+        s.style.background = SPARK_COLORS[Math.floor(Math.random()*SPARK_COLORS.length)]
+        s.style.opacity = '0.95'
+        s.style.transform = 'translate(-50%,-50%)'
+        sparkleLayer.appendChild(s)
+        const angle = Math.random()*Math.PI*2
+        const dist = Math.random()*60+10
+        const dx = Math.cos(angle)*dist
+        const dy = Math.sin(angle)*dist
+        s.animate([
+          { transform: `translate(${dx}px, ${dy}px) scale(1)`, opacity:1 },
+          { transform: `translate(${dx*1.6}px, ${dy*1.6}px) scale(0.3)`, opacity:0 }
+        ],{duration:700+Math.random()*400,easing:'cubic-bezier(.1,.7,.3,1)'}).onfinish = ()=> s.remove()
+      }
+    }
+
+    document.addEventListener('click', (e)=>{
+      // don't trigger on interactions inside modal forms when clicking their elements such as buttons that open email
+      spawnSparkles(e.clientX, e.clientY)
+    })
+
+    // ------------------ INITIALIZE ------------------
+    loadPosts()
+
+    // ------------------ Hash handling for screen and post (deep linking) ------------------
+    // Example hash patterns:
+    // #screen=wall
+    // #post=wall-01
+    window.addEventListener('hashchange', ()=>{
+      const h = location.hash.replace(/^#/, '')
+      if(h.startsWith('screen=')){
+        const s = h.split('=')[1]; if(s) showScreen(s)
+      } else if(h.startsWith('post=')){
+        handleHashPostOpen()
+      }
+    })
+
+    // ------------------ Accessibility tweaks ------------------
+    // keyboard left/right for navigation when modal closed
+    document.addEventListener('keydown',(e)=>{
+      if(modal.classList.contains('show')) return
+      if(e.key==='ArrowLeft' || e.key==='ArrowRight'){
+        const order = ['gateway','person','wall','pawaura','frame','wire','rack']
+        const active = document.querySelector('.screen.active').id
+        const idx = order.indexOf(active)
+        let next = idx
+        if(e.key==='ArrowLeft') next = Math.max(0, idx-1)
+        if(e.key==='ArrowRight') next = Math.min(order.length-1, idx+1)
+        showScreen(order[next])
+      }
+    })
+
+    // ------------------ Helpful developer notes ------------------
+    /*
+      - To add new posts: edit /posts/posts.json and add a new object with keys:
+          title, slug, lang ("en" or "si"), tags (array), date (YYYY-MM-DD), excerpt, path
+        Example:
+          {"title":"A Quiet Morning","slug":"wall-01","lang":"en","tags":["morning","field"],"date":"2025-12-29","excerpt":"A short excerpt...","path":"posts/wall-01.html"}
+
+      - Create the post file posts/wall-01.html. Prefer to include the article content
+        inside a container like: <div id="post-body">... your HTML ...</div>
+
+      - Each post can include images using relative paths (../images/...) or /images/...
+
+      - If you want posts to appear automatically without editing posts.json, you would need
+        a build step (script) or server-side logic. For static hosting, keep posts.json as the index.
+
+      - Remember: fetch() requires a server context during testing. Use:
+          python -m http.server 8000
+        or VS Code Live Server extension.
+    */
+
+  </script>
+
+  <!-- =====================
+       SAMPLE posts.json and post HTML (copy these into /posts/)
+       ===================== -->
+  <!--
+    posts/posts.json (example)
+    --------------------------------
+    [
+      {
+        "title":"Sun at the Edge",
+        "slug":"wall-01",
+        "lang":"en",
+        "tags":["sun","poem"],
+        "date":"2025-12-01",
+        "excerpt":"A short excerpt about the sun and long roads.",
+        "path":"posts/wall-01.html"
+      },
+      {
+        "title":"මෑතකාලීන සිහින",
+        "slug":"pawaura-01",
+        "lang":"si",
+        "tags":["අද","හිමිතුරු"],
+        "date":"2025-12-05",
+        "excerpt":"සිහිනක මෝහනයක්...",
+        "path":"posts/pawaura-01.html"
+      }
+    ]
+
+    Example post: posts/wall-01.html (save this file as UTF-8)
+    -------------------------------------------------------
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>Sun at the Edge</title></head>
+    <body>
+      <div id="post-body">
+        <h1>Sun at the Edge</h1>
+        <p>First paragraph of the post...</p>
+        <p>Second paragraph...</p>
+      </div>
+    </body></html>
+
+    Example Sinhala post: posts/pawaura-01.html
+    -------------------------------------------
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>මෑතකාලීන සිහින</title></head>
+    <body>
+      <div id="post-body">
+        <h1>මෑතකාලීන සිහින</h1>
+        <p>සිංහල පෙළ...</p>
+      </div>
+    </body></html>
+
+  -->
+
+</body>
+</html>
